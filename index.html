@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>时钟</title>
+
+<link href="https://cdn.jsdelivr.net/npm/qweather-icons/font/qweather-icons.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.9/css/weather-icons.min.css">
+
+<style>
+  :root{
+    --bg:#000000;
+    --fg:rgba(255,255,255,1);
+    --dim:rgba(255,255,255,.78);
+    --dim2:rgba(255,255,255,.62);
+    --wx-op:0.8;
+    --drift-x:0px;
+    --drift-y:0px;
+    --btn-bg:#0f0f0f;
+    --btn-bd:rgba(255,255,255,.16);
+    --btn-fg:#dddddd;
+    --btn-active:#ffffff;
+    --font: "DejaVu Sans Mono", "Liberation Mono", Menlo, Consolas,
+            "Courier New", monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    height:100%;margin:0;padding:0;
+    background:var(--bg);color:var(--fg);
+    overflow:hidden;
+    -webkit-tap-highlight-color:transparent;
+    -webkit-user-select:none;user-select:none;
+    font-family:var(--font);
+  }
+
+  body.hide-cursor,
+  body.hide-cursor *{ cursor:none !important; }
+
+  #app{
+    position:fixed;
+    top:0;right:0;bottom:0;left:0;
+  }
+
+  #weatherRow, #timeWrap, #info{
+    transform: translate(var(--drift-x, 0px), var(--drift-y, 0px));
+    transition: transform 1.2s ease;
+  }
+
+  #weatherRow{
+    position:absolute;
+    top:calc(1.2vmin + env(safe-area-inset-top, 0px) + 1.2em);
+    left:12.5%;right:12.5%;
+    z-index:2;
+    display:flex;align-items:center;justify-content:center;
+    gap:.5em;line-height:1.2;
+    color:var(--dim);
+    white-space:nowrap;overflow:hidden;
+    font-weight:600;font-size:32px;
+  }
+  #weatherRow .wcity{opacity:.85;}
+  #weatherRow .wtemp{font-variant-numeric:tabular-nums;}
+  #weatherRow #forecast{
+    display:inline-flex;align-items:center;gap:.5em;
+    color:var(--dim2);
+  }
+  #weatherRow .fc{
+    display:inline-flex;align-items:center;gap:.28em;
+  }
+  #weatherRow .fc-date{opacity:.85;}
+  #weatherRow .fc-temp{font-variant-numeric:tabular-nums;}
+  #weatherRow .fc-sep{opacity:.35;}
+
+  .wx-icon{
+    width:1em;height:1em;
+    vertical-align:-0.12em;
+    display:inline-block;
+    flex:0 0 auto;
+    opacity:var(--wx-op, 1);
+    transition:opacity .2s linear;
+  }
+  .wx-font{
+    display:inline-flex;
+    align-items:center;justify-content:center;
+    line-height:1;
+  }
+  .wx-font i{
+    font-size:1em;line-height:1;
+    display:block;font-style:normal;
+  }
+  .wx-font-qi i{ color:#ffffff; }
+  .wx-font-wi i{ color:#00E5FF; }
+
+  #timeWrap{
+    position:absolute;
+    top:0;right:0;bottom:0;left:0;
+    z-index:1;
+    display:flex;align-items:center;justify-content:center;
+    overflow:hidden;pointer-events:none;
+  }
+  #time{
+    pointer-events:auto;
+    display:flex;align-items:center;
+    font-size:100px;line-height:1;
+    white-space:nowrap;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:-.02em;font-weight:700;
+    max-width:95%;
+  }
+  #time .num{display:block;flex:0 0 auto;padding:0 .01em;}
+  #time .colon{
+    display:flex;flex-direction:column;
+    justify-content:center;align-items:center;
+    gap:.22em;padding:0 .08em;flex:0 0 auto;
+  }
+  #time .colon i{
+    display:block;width:.13em;height:.13em;
+    border-radius:50%;background:currentColor;
+  }
+
+  #info{
+    position:absolute;
+    left:12.5%;right:12.5%;
+    bottom:calc(1.2vmin + 62px + env(safe-area-inset-bottom, 0px));
+    z-index:2;
+    text-align:center;
+    color:var(--dim);
+    line-height:1.2;
+    white-space:nowrap;overflow:hidden;
+    letter-spacing:.01em;font-weight:600;
+    font-size:40px;
+  }
+
+  #toolbar{
+    position:absolute;
+    left:1.5vmin;right:1.5vmin;
+    bottom:calc(1.2vmin + env(safe-area-inset-bottom, 0px));
+    z-index:3;
+    display:flex;flex-wrap:wrap;
+    justify-content:center;align-items:center;
+    gap:.8vmin .8vmin;
+    padding:.6vmin .5vmin;
+    transition:opacity .28s ease, visibility .28s ease;
+  }
+  #toolbar.hidden{opacity:0;visibility:hidden;pointer-events:none;}
+  .btn{
+    -webkit-appearance:none;appearance:none;
+    font-family:inherit;
+    font-size:clamp(12px,1.7vmin,20px);
+    line-height:1.2;
+    padding:.6em 1.1em;
+    border-radius:6px;
+    border:1px solid var(--btn-bd);
+    background:var(--btn-bg);
+    color:var(--btn-fg);
+    cursor:pointer;white-space:nowrap;
+    transition:none;outline:none;
+    min-height:38px;
+  }
+  .btn:active{opacity:.72;}
+  .btn.active{
+    border-color:var(--btn-active);
+    color:var(--btn-active);
+    box-shadow:0 0 0 1px var(--btn-active) inset;
+  }
+
+  #overlay{
+    position:fixed;top:0;right:0;bottom:0;left:0;
+    z-index:90;display:none;background:transparent;
+  }
+  #overlay.show{display:block;}
+
+  #menu{
+    position:fixed;left:50%;
+    transform:translateX(-50%);
+    z-index:100;display:none;
+    background:rgba(28,28,30,.98);
+    border:1px solid rgba(255,255,255,.18);
+    border-radius:14px;padding:12px;
+    max-height:70vh;overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    box-shadow:0 10px 40px rgba(0,0,0,.6);
+    min-width:320px;max-width:94vw;
+  }
+  #menu.show{display:block;}
+  #menu.narrow{ min-width:180px; }
+
+  .menu-title{
+    font-size:12px;color:rgba(255,255,255,.5);
+    padding:2px 6px 10px;letter-spacing:.08em;
+  }
+
+  .font-grid{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+  }
+  .font-item, .icon-item{
+    -webkit-appearance:none;appearance:none;
+    display:block;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;
+    color:#fff;
+    padding:14px 10px;
+    font-size:18px;line-height:1.2;
+    text-align:center;cursor:pointer;
+    white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;outline:none;
+    letter-spacing:.12em;
+  }
+  .font-item:active, .icon-item:active{background:rgba(255,255,255,.16);}
+  .font-item.active, .icon-item.active{
+    border-color:#ffffff;
+    background:rgba(255,255,255,.16);
+    box-shadow:0 0 0 1px #ffffff inset;
+  }
+  .icon-item{
+    font-size:14px;
+    font-family:var(--font);
+    letter-spacing:.02em;
+    text-align:left;
+    padding:16px 18px;
+  }
+
+  .display-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:8px;
+  }
+  .display-item{
+    -webkit-appearance:none;appearance:none;
+    display:flex;justify-content:space-between;align-items:center;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;
+    color:#fff;
+    padding:14px 16px;
+    font-size:15px;line-height:1.2;
+    cursor:pointer;outline:none;
+    font-family:inherit;
+    letter-spacing:.02em;
+  }
+  .display-item:active{background:rgba(255,255,255,.16);}
+  .display-item .state{
+    font-size:13px;color:rgba(255,255,255,.4);
+  }
+  .display-item.on .state{ color:#4ade80; }
+  .display-item.on .state::before{ content:"✓ "; }
+
+  .bright-grid{
+    display:grid;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:8px;
+  }
+  .bright-item{
+    -webkit-appearance:none;appearance:none;
+    display:block;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:10px;
+    color:#fff;
+    padding:14px 4px;
+    font-size:15px;line-height:1.1;
+    text-align:center;cursor:pointer;
+    white-space:nowrap;outline:none;
+    font-variant-numeric:tabular-nums;
+  }
+  .bright-item:active{background:rgba(255,255,255,.16);}
+  .bright-item.active{
+    border-color:#ffffff;
+    background:rgba(255,255,255,.16);
+    box-shadow:0 0 0 1px #ffffff inset;
+  }
+
+  .about-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:0 6px 10px;
+    border-bottom:1px solid rgba(255,255,255,.08);
+    margin-bottom:10px;
+  }
+  .about-head .about-title{
+    font-size:12px;
+    color:rgba(255,255,255,.5);
+    letter-spacing:.08em;
+  }
+  .about-copy-btn{
+    -webkit-appearance:none;appearance:none;
+    font-family:inherit;
+    font-size:12px;
+    padding:5px 12px;
+    border-radius:6px;
+    border:1px solid rgba(255,255,255,.20);
+    background:rgba(255,255,255,.08);
+    color:#fff;
+    cursor:pointer;
+    outline:none;
+    line-height:1;
+    min-height:0;
+    transition:background .15s, border-color .15s, color .15s;
+  }
+  .about-copy-btn:hover{ background:rgba(255,255,255,.16); }
+  .about-copy-btn.done{
+    background:rgba(74,222,128,.20);
+    border-color:rgba(74,222,128,.6);
+    color:#4ade80;
+  }
+  .about-text{
+    font-size:13px;
+    line-height:1.7;
+    color:rgba(255,255,255,.78);
+    white-space:pre-wrap;
+    font-family:inherit;
+    letter-spacing:0;
+    -webkit-user-select:text;
+    user-select:text;
+    max-height:52vh;
+    overflow-y:auto;
+    padding:0 6px 4px;
+  }
+
+  @media (max-width:820px) and (max-height:600px) {
+    .btn        { padding:.5em .9em; min-height:34px; }
+    .font-item  { font-size:16px; padding:12px 8px; }
+    .icon-item  { font-size:12px; padding:12px 10px; }
+    .display-item{ font-size:13px; padding:12px 10px; }
+    .bright-item{ font-size:13px; padding:11px 2px; }
+    .about-text { font-size:12px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="weatherRow">
+    <span class="wcity">天津</span>
+    <span class="wtemp" id="wTemp"></span>
+    <span id="forecast"></span>
+  </div>
+
+  <div id="timeWrap">
+    <div id="time">
+      <span class="num" id="tH">00</span>
+      <span class="colon"><i></i><i></i></span>
+      <span class="num" id="tM">00</span>
+      <span class="colon" id="colonSec"><i></i><i></i></span>
+      <span class="num" id="tS">00</span>
+    </div>
+  </div>
+
+  <div id="info">正在加载…</div>
+
+  <div id="toolbar">
+    <button class="btn" id="btnFont">字体</button>
+    <button class="btn" id="btnIcon">图标</button>
+    <button class="btn" id="btnDisplay">显示</button>
+    <button class="btn" id="btnBright">亮度</button>
+    <button class="btn" id="btnAbout">关于</button>
+    <button class="btn" id="btnFull">全屏</button>
+  </div>
+</div>
+
+<div id="overlay"></div>
+<div id="menu"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* =========================================================
+     1. 等宽字体检测 + 像素级去重
+     ========================================================= */
+  var FONT_TEST_STR = '0123456789';
+
+  function detectMonoFonts() {
+    var canvas = document.createElement('canvas');
+    var ctx = canvas.getContext('2d');
+
+    var candidates = [
+      'DejaVu Sans Mono','Liberation Mono','Noto Sans Mono',
+      'Noto Sans Mono CJK SC','Noto Sans Mono CJK TC','Noto Sans Mono CJK',
+      'Noto Mono','WenQuanYi Micro Hei Mono','WenQuanYi Zen Hei Mono',
+      'WenQuanYi Micro Hei','WenQuanYi Zen Hei',
+      'Sarasa Mono SC','Sarasa Mono TC','Sarasa Mono HC',
+      'Sarasa Mono J','Sarasa Mono K',
+      'LXGW WenKai Mono','Maple Mono','Maple Mono NF',
+      'Source Code Pro','Ubuntu Mono','Ubuntu Sans Mono',
+      'Roboto Mono','Roboto Mono for Powerline','Fira Mono','Fira Code',
+      'Hack','JetBrains Mono','Inconsolata','Droid Sans Mono',
+      'Droid Sans Fallback','Bitstream Vera Sans Mono','Anonymous Pro',
+      'Iosevka','Iosevka Term','IBM Plex Mono','PT Mono','Space Mono',
+      'Share Tech Mono','Oxygen Mono','Overpass Mono','Cousine',
+      'Nanum Gothic Coding','NanumGothicCoding','Terminus','Tamsyn',
+      'Fixed','Clean','Nimbus Mono PS','Nimbus Mono L','FreeMono',
+      'Courier 10 Pitch','Cica','Victor Mono','Comic Mono','Monoid',
+      'M+ 1m','M+ 1mn','M+ 2m','Sudo','Go Mono','MonoLisa',
+      'SF Mono','Menlo','Monaco','Andale Mono','Andalé Mono',
+      'Cascadia Mono','Cascadia Code','Consolas','Courier New',
+      'Courier','Lucida Console','Lucida Sans Typewriter',
+      'MS Gothic','MS Mincho','SimSun','NSimSun'
+    ];
+
+    var baseFonts = ['monospace','sans-serif','serif'];
+    var s1 = 'mmmmmmmmmmlli', s2 = 'WWWWWWWWWWWW';
+    var defaults = {};
+    baseFonts.forEach(function (b) {
+      ctx.font = '72px ' + b;
+      defaults[b] = [ctx.measureText(s1).width, ctx.measureText(s2).width];
+    });
+
+    var result = [], seen = {};
+
+    for (var i = 0; i < candidates.length; i++) {
+      var name = candidates[i];
+      var lname = name.toLowerCase();
+      if (seen[lname]) continue;
+
+      var found = false;
+      for (var k = 0; k < baseFonts.length; k++) {
+        var b = baseFonts[k];
+        ctx.font = '72px "' + name + '", ' + b;
+        var w1 = ctx.measureText(s1).width;
+        var w2 = ctx.measureText(s2).width;
+        if (Math.abs(w1 - defaults[b][0]) > 0.5 ||
+            Math.abs(w2 - defaults[b][1]) > 0.5) { found = true; break; }
+      }
+      if (!found) continue;
+
+      ctx.font = '72px "' + name + '", monospace';
+      var wm = ctx.measureText('mmmmmmmmmm').width;
+      var wi = ctx.measureText('iiiiiiiiii').width;
+      if (Math.abs(wm - wi) > 2) continue;
+
+      seen[lname] = true;
+      result.push({
+        name: name,
+        stack: '"' + name + '", "DejaVu Sans Mono", "Liberation Mono", ' +
+               'Consolas, "Courier New", monospace'
+      });
+    }
+
+    if (result.length === 0) {
+      return [{ name: 'Monospace', stack: 'monospace' }];
+    }
+
+    var CW = 320, CH = 64;
+    canvas.width = CW;
+    canvas.height = CH;
+    var cx = canvas.getContext('2d');
+
+    var unique = [];
+    var sigs = [];
+
+    for (var j = 0; j < result.length; j++) {
+      cx.clearRect(0, 0, CW, CH);
+      cx.fillStyle = '#000';
+      cx.fillRect(0, 0, CW, CH);
+      cx.fillStyle = '#fff';
+      cx.font = '48px ' + result[j].stack;
+      cx.textBaseline = 'top';
+      cx.fillText(FONT_TEST_STR, 4, 8);
+
+      var data = cx.getImageData(0, 0, CW, CH).data;
+
+      var isDup = false;
+      for (var s = 0; s < sigs.length; s++) {
+        if (sameGray(data, sigs[s])) { isDup = true; break; }
+      }
+      if (!isDup) {
+        sigs.push(new Uint8ClampedArray(data));
+        unique.push(result[j]);
+      }
+    }
+
+    if (unique.length === 0) unique.push(result[0]);
+    return unique;
+  }
+
+  function sameGray(a, b) {
+    if (a.length !== b.length) return false;
+    for (var i = 0; i < a.length; i += 4) {
+      if (a[i] !== b[i]) return false;
+    }
+    return true;
+  }
+
+  /* =========================================================
+     2. 状态
+     ========================================================= */
+  var STORE_KEY = 'ym-clock-state-v6';
+  var MONO_FONTS = [];
+  var BRIGHT_STEPS = [100,90,80,70,60,50,40,30,20,10];
+
+  var ICON_SETS = [
+    { id: 'erik',       name: 'Weather Icons' },
+    { id: 'builtin',    name: '内置彩色' },
+    { id: 'weatherbit', name: 'Weatherbit' },
+    { id: 'qweather',   name: '和风天气' }
+  ];
+
+  var FESTIVALS = [
+    { name: '元旦',   type: 'solar', month: 1,  day: 1 },
+    { name: '妇女节', type: 'solar', month: 3,  day: 8 },
+    { name: '劳动节', type: 'solar', month: 5,  day: 1 },
+    { name: '儿童节', type: 'solar', month: 6,  day: 1 },
+    { name: '建军节', type: 'solar', month: 8,  day: 1 },
+    { name: '国庆节', type: 'solar', month: 10, day: 1 },
+    { name: '春节',   type: 'lunar', month: 1,  day: 1 },
+    { name: '元宵',   type: 'lunar', month: 1,  day: 15 },
+    { name: '端午',   type: 'lunar', month: 5,  day: 5 },
+    { name: '七夕',   type: 'lunar', month: 7,  day: 7 },
+    { name: '中元',   type: 'lunar', month: 7,  day: 15 },
+    { name: '中秋',   type: 'lunar', month: 8,  day: 15 },
+    { name: '重阳',   type: 'lunar', month: 9,  day: 9 },
+    { name: '腊八',   type: 'lunar', month: 12, day: 8 },
+    { name: '除夕',   type: 'lunar', month: 12, day: 30 }
+  ];
+
+  var state = {
+    fontName: null,
+    brightness: 60,
+    nightBrightness: 20,
+    showSec: true,
+    showDate: true,
+    showWeather: true,
+    weatherIconSet: 'erik',
+    nightMode: true,
+    nightStart: 22,
+    nightEnd: 6
+  };
+
+  var weatherHasData = false;
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      var o = JSON.parse(raw);
+      if (o && typeof o === 'object') {
+        if (typeof o.fontName === 'string') state.fontName = o.fontName;
+        if (typeof o.brightness === 'number' &&
+            BRIGHT_STEPS.indexOf(o.brightness) >= 0) {
+          state.brightness = o.brightness;
+        }
+        if (typeof o.nightBrightness === 'number' &&
+            BRIGHT_STEPS.indexOf(o.nightBrightness) >= 0) {
+          state.nightBrightness = o.nightBrightness;
+        }
+        if (typeof o.showSec === 'boolean') state.showSec = o.showSec;
+        if (typeof o.showDate === 'boolean') state.showDate = o.showDate;
+        if (typeof o.showWeather === 'boolean') state.showWeather = o.showWeather;
+        if (typeof o.weatherIconSet === 'string') {
+          for (var i = 0; i < ICON_SETS.length; i++) {
+            if (ICON_SETS[i].id === o.weatherIconSet) {
+              state.weatherIconSet = o.weatherIconSet;
+              break;
+            }
+          }
+        }
+        if (typeof o.nightMode === 'boolean') state.nightMode = o.nightMode;
+      }
+    } catch (e) {}
+  }
+  function saveState() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+
+  /* =========================================================
+     3. DOM
+     ========================================================= */
+  var $ = function (id) { return document.getElementById(id); };
+  var timeWrap = $('timeWrap'), timeEl = $('time');
+  var tH = $('tH'), tM = $('tM'), tS = $('tS'), colonSec = $('colonSec');
+  var infoEl = $('info'), weatherRow = $('weatherRow');
+  var wTemp = $('wTemp'), forecastEl = $('forecast');
+  var toolbar = $('toolbar'), menuEl = $('menu'), overlay = $('overlay');
+  var btnFont = $('btnFont'), btnIcon = $('btnIcon'), btnDisplay = $('btnDisplay');
+  var btnBright = $('btnBright'), btnAbout = $('btnAbout'), btnFull = $('btnFull');
+
+  /* =========================================================
+     4. 亮度 / 夜间逻辑
+     ========================================================= */
+  function isNightNow() {
+    if (!state.nightMode) return false;
+    var h = new Date().getHours();
+    if (state.nightStart < state.nightEnd) {
+      return h >= state.nightStart && h < state.nightEnd;
+    } else {
+      return h >= state.nightStart || h < state.nightEnd;
+    }
+  }
+
+  function applyBrightness(pct) {
+    if (BRIGHT_STEPS.indexOf(pct) < 0) pct = 60;
+    if (isNightNow()) {
+      state.nightBrightness = pct;
+    } else {
+      state.brightness = pct;
+    }
+    saveState();
+    applyEffectiveBrightness();
+  }
+
+  function applyEffectiveBrightness() {
+    var pct = isNightNow() ? state.nightBrightness : state.brightness;
+    var a = pct / 100;
+    var root = document.documentElement.style;
+    root.setProperty('--fg',   'rgba(255,255,255,' + a.toFixed(3) + ')');
+    root.setProperty('--dim',  'rgba(255,255,255,' + (a * 0.78).toFixed(3) + ')');
+    root.setProperty('--dim2', 'rgba(255,255,255,' + (a * 0.62).toFixed(3) + ')');
+    var wxOp = 0.6 + 0.4 * a;
+    root.setProperty('--wx-op', wxOp.toFixed(3));
+  }
+
+  /* =========================================================
+     5. 应用函数
+     ========================================================= */
+  function applyFont(name) {
+    if (!MONO_FONTS.length) return;
+    var found = null;
+    for (var i = 0; i < MONO_FONTS.length; i++) {
+      if (MONO_FONTS[i].name === name) { found = MONO_FONTS[i]; break; }
+    }
+    if (!found) found = MONO_FONTS[0];
+    state.fontName = found.name;
+    document.documentElement.style.setProperty('--font', found.stack);
+    saveState();
+    requestAnimationFrame(scheduleFit);
+  }
+
+  function applyVisibility() {
+    colonSec.style.display   = state.showSec ? '' : 'none';
+    tS.style.display         = state.showSec ? '' : 'none';
+    infoEl.style.display     = state.showDate ? '' : 'none';
+    weatherRow.style.display =
+      (state.showWeather && weatherHasData) ? '' : 'none';
+    saveState();
+    requestAnimationFrame(scheduleFit);
+  }
+
+  function applyIconSet(id) {
+    var valid = false;
+    for (var i = 0; i < ICON_SETS.length; i++) {
+      if (ICON_SETS[i].id === id) { valid = true; break; }
+    }
+    if (!valid) id = 'erik';
+    state.weatherIconSet = id;
+    saveState();
+
+    if (lastWeatherData) {
+      renderForecast(lastWeatherData);
+    } else {
+      fetchWeather();
+    }
+    requestAnimationFrame(scheduleFit);
+  }
+
+  /* =========================================================
+     6. 像素漂移
+     ========================================================= */
+  function driftPixels() {
+    var x = Math.floor(Math.random() * 9) - 4;
+    var y = Math.floor(Math.random() * 9) - 4;
+    var root = document.documentElement.style;
+    root.setProperty('--drift-x', x + 'px');
+    root.setProperty('--drift-y', y + 'px');
+  }
+
+  /* =========================================================
+     7. 时间自适应
+     ========================================================= */
+  var fitRaf = 0;
+  function fitTime() {
+    if (!timeWrap || !timeEl) return;
+    var totalW = timeWrap.clientWidth, totalH = timeWrap.clientHeight;
+    if (totalW <= 0 || totalH <= 0) return;
+
+    var centerY = totalH / 2;
+    var vpRect = timeWrap.getBoundingClientRect();
+
+    var topBound = vpRect.top;
+    if (state.showWeather && weatherHasData &&
+        weatherRow.style.display !== 'none') {
+      var wr = weatherRow.getBoundingClientRect();
+      if (wr.height > 0) topBound = wr.bottom + 6;
+    }
+    var botBound = vpRect.bottom;
+    if (state.showDate && infoEl.style.display !== 'none') {
+      var ir = infoEl.getBoundingClientRect();
+      if (ir.height > 0 && ir.top < botBound) botBound = ir.top - 6;
+    }
+    var tr = toolbar.getBoundingClientRect();
+    if (tr.height > 0 && tr.top < botBound) botBound = tr.top - 6;
+
+    var spaceTop = centerY - (topBound - vpRect.top);
+    var spaceBottom = (botBound - vpRect.top) - centerY;
+    var halfSpace = Math.min(spaceTop, spaceBottom) - 4;
+    if (halfSpace < 20) halfSpace = 20;
+    var availH = halfSpace * 2;
+    var availW = totalW * 0.95;
+
+    timeEl.style.fontSize = '100px';
+    var rect = timeEl.getBoundingClientRect();
+    var w = rect.width || 1, h = rect.height || 100;
+    if (w < 1) w = 1;
+
+    var size = Math.min(availW / w, availH / h) * 100;
+    if (!isFinite(size) || size <= 0) size = 100;
+    size = Math.max(16, Math.min(size, 2400));
+    timeEl.style.fontSize = size.toFixed(2) + 'px';
+  }
+
+  function scheduleFit() {
+    if (fitRaf) cancelAnimationFrame(fitRaf);
+    fitRaf = requestAnimationFrame(function () {
+      fitRaf = 0;
+      fitTime(); fitInfoLine(); fitWeatherLine();
+    });
+  }
+
+  function fitOneLine(el, maxSize, minSize) {
+    if (!el || el.style.display === 'none') return;
+    var avail = el.clientWidth;
+    if (avail <= 0) return;
+    var size = maxSize;
+    el.style.fontSize = size + 'px';
+    for (var i = 0; i < 6; i++) {
+      var w = el.scrollWidth;
+      if (w <= avail || size <= minSize) break;
+      size = size * (avail / w) * 0.98;
+      if (size < minSize) size = minSize;
+      el.style.fontSize = size + 'px';
+    }
+    if (el.scrollWidth > avail) el.style.fontSize = minSize + 'px';
+  }
+  function fitInfoLine() {
+    var vh = window.innerHeight || 600;
+    fitOneLine(infoEl, Math.min(96, Math.round(vh * 0.14)), 14);
+  }
+  function fitWeatherLine() {
+    var vh = window.innerHeight || 600;
+    fitOneLine(weatherRow, Math.min(80, Math.round(vh * 0.11)), 12);
+  }
+
+  /* =========================================================
+     8. 农历 + 节气
+     ========================================================= */
+  var lunarInfo = [
+    0x04bd8,0x04ae0,0x0a570,0x054d5,0x0d260,0x0d950,0x16554,0x056a0,0x09ad0,0x055d2,
+    0x04ae0,0x0a5b6,0x0a4d0,0x0d250,0x1d255,0x0b540,0x0d6a0,0x0ada2,0x095b0,0x14977,
+    0x04970,0x0a4b0,0x0b4b5,0x06a50,0x06d40,0x1ab54,0x02b60,0x09570,0x052f2,0x04970,
+    0x06566,0x0d4a0,0x0ea50,0x06e95,0x05ad0,0x02b60,0x186e3,0x092e0,0x1c8d7,0x0c950,
+    0x0d4a0,0x1d8a6,0x0b550,0x056a0,0x1a5b4,0x025d0,0x092d0,0x0d2b2,0x0a950,0x0b557,
+    0x06ca0,0x0b550,0x15355,0x04da0,0x0a5b0,0x14573,0x052b0,0x0a9a8,0x0e950,0x06aa0,
+    0x0aea6,0x0ab50,0x04b60,0x0aae4,0x0a570,0x05260,0x0f263,0x0d950,0x05b57,0x056a0,
+    0x096d0,0x04dd5,0x04ad0,0x0a4d0,0x0d4d4,0x0d250,0x0d558,0x0b540,0x0b6a0,0x195a6,
+    0x095b0,0x049b0,0x0a974,0x0a4b0,0x0b27a,0x06a50,0x06d40,0x0af46,0x0ab60,0x09570,
+    0x04af5,0x04970,0x064b0,0x074a3,0x0ea50,0x06b58,0x055c0,0x0ab60,0x096d5,0x092e0,
+    0x0c960,0x0d954,0x0d4a0,0x0da50,0x07552,0x056a0,0x0abb7,0x025d0,0x092d0,0x0cab5,
+    0x0a950,0x0b4a0,0x0baa4,0x0ad50,0x055d9,0x04ba0,0x0a5b0,0x15176,0x052b0,0x0a930,
+    0x07954,0x06aa0,0x0ad50,0x05b52,0x04b60,0x0a6e6,0x0a4e0,0x0d260,0x0ea65,0x0d530,
+    0x05aa0,0x076a3,0x096d0,0x04afb,0x04ad0,0x0a4d0,0x1d0b6,0x0d250,0x0d520,0x0dd45,
+    0x0b5a0,0x056d0,0x055b2,0x049b0,0x0a577,0x0a4b0,0x0aa50,0x1b255,0x06d20,0x0ada0,
+    0x14b63,0x09370,0x049f8,0x04970,0x064b0,0x168a6,0x0ea50,0x06b20,0x1a6c4,0x0aae0,
+    0x0a2e0,0x0d2e3,0x0c960,0x0d557,0x0d4a0,0x0da50,0x05d55,0x056a0,0x0a6d0,0x055d4,
+    0x052d0,0x0a9b8,0x0a950,0x0b4a0,0x0b6a6,0x0ad50,0x055a0,0x0aba4,0x0a5b0,0x052b0,
+    0x0b273,0x06930,0x07337,0x06aa0,0x0ad50,0x14b55,0x04b60,0x0a570,0x054e4,0x0d160,
+    0x0e968,0x0d520,0x0daa0,0x16aa6,0x056d0,0x04ae0,0x0a9d4,0x0a2d0,0x0d150,0x0f252,
+    0x0d520
+  ];
+  var LUNAR_MONTHS = ['','正','二','三','四','五','六','七','八','九','十','冬','腊'];
+  var CN_NUM = ['','一','二','三','四','五','六','七','八','九'];
+
+  function leapMonth(y){return lunarInfo[y-1900]&0xf;}
+  function leapDays(y){if(leapMonth(y))return (lunarInfo[y-1900]&0x10000)?30:29;return 0;}
+  function monthDays(y,m){return (lunarInfo[y-1900]&(0x10000>>m))?30:29;}
+  function lYearDays(y){var i,sum=348;for(i=0x8000;i>0x8;i>>=1)sum+=(lunarInfo[y-1900]&i)?1:0;return sum+leapDays(y);}
+
+  function solar2lunar(y,m,d){
+    var offset=(Date.UTC(y,m-1,d)-Date.UTC(1900,0,31))/86400000;
+    var i,temp=0;
+    for(i=1900;i<2101&&offset>0;i++){temp=lYearDays(i);offset-=temp;}
+    if(offset<0){offset+=temp;i--;}
+    var lunarYear=i,leap=leapMonth(lunarYear),isLeap=false,j;
+    for(j=1;j<13&&offset>0;j++){
+      if(leap>0&&j===leap+1&&!isLeap){--j;isLeap=true;temp=leapDays(lunarYear);}
+      else temp=monthDays(lunarYear,j);
+      if(isLeap&&j===leap+1)isLeap=false;
+      offset-=temp;
+    }
+    if(offset===0&&leap>0&&j===leap+1){
+      if(isLeap)isLeap=false;else{isLeap=true;--j;}
+    }
+    if(offset<0){offset+=temp;--j;}
+    return {lunarYear:lunarYear,lunarMonth:j,lunarDay:offset+1,isLeap:isLeap};
+  }
+  function lunarDayName(d){
+    if(d===10)return '初十';
+    if(d===20)return '二十';
+    if(d===30)return '三十';
+    var p=['初','十','廿','三'];
+    return p[Math.floor(d/10)]+CN_NUM[d%10];
+  }
+
+  var sTermInfo=[0,21208,42467,63836,85337,107014,128867,150921,173149,195551,218072,240693,263343,285989,308563,331033,353350,375494,397447,419210,440795,462224,483532,504758];
+  var TERM_NAMES=['小寒','大寒','立春','雨水','惊蛰','春分','清明','谷雨','立夏','小满','芒种','夏至','小暑','大暑','立秋','处暑','白露','秋分','寒露','霜降','立冬','小雪','大雪','冬至'];
+
+  function termDate(year,n){
+    var ms=(31556925974.7*(year-1900)+sTermInfo[n]*60000)+Date.UTC(1900,0,6,2,5);
+    var day=new Date(ms).getUTCDate();
+    var month=Math.floor(n/2);
+    return new Date(year,month,day);
+  }
+  function nextTerm(now){
+    var today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    var y=now.getFullYear();
+    for(var yy=y;yy<=y+1;yy++){
+      for(var n=0;n<24;n++){
+        var dt=termDate(yy,n);
+        if(dt>=today){
+          var diff=Math.round((dt-today)/86400000);
+          return {name:TERM_NAMES[n],diff:diff};
+        }
+      }
+    }
+    return null;
+  }
+
+  /* =========================================================
+     9. 节日计算
+     ========================================================= */
+  var festivalCache = {};
+
+  function computeFestivalsForYear(y){
+    if (festivalCache[y]) return festivalCache[y];
+
+    var result = [];
+    var startDate = new Date(y, 0, 1);
+    var endDate = new Date(y + 1, 2, 1);
+
+    FESTIVALS.forEach(function(f){
+      var dt = null;
+
+      if (f.type === 'solar') {
+        dt = new Date(y, f.month - 1, f.day);
+      } else {
+        for (var cur = new Date(startDate); cur < endDate; cur.setDate(cur.getDate() + 1)) {
+          var l = solar2lunar(cur.getFullYear(), cur.getMonth() + 1, cur.getDate());
+          if (l.lunarYear !== y) continue;
+
+          if (f.name === '除夕') {
+            if (l.lunarMonth === 12 && (l.lunarDay === 29 || l.lunarDay === 30)) {
+              var next = new Date(cur);
+              next.setDate(next.getDate() + 1);
+              var ln = solar2lunar(next.getFullYear(), next.getMonth() + 1, next.getDate());
+              if (ln.lunarMonth !== 12 || ln.lunarYear !== y) {
+                dt = new Date(cur);
+                break;
+              }
+            }
+          } else if (l.lunarMonth === f.month && l.lunarDay === f.day && !l.isLeap) {
+            dt = new Date(cur);
+            break;
+          }
+        }
+      }
+
+      if (dt) result.push({ name: f.name, date: dt });
+    });
+
+    festivalCache[y] = result;
+    return result;
+  }
+
+  function getUpcomingFestivals(){
+    var y = new Date().getFullYear();
+    var list = computeFestivalsForYear(y).slice();
+    list = list.concat(computeFestivalsForYear(y + 1));
+    return list;
+  }
+
+  /* =========================================================
+     10. 日期渲染
+     ========================================================= */
+  var infoKey = '';
+  function renderInfo(now){
+    var y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate();
+    var week = '日一二三四五六'.charAt(now.getDay());
+
+    var parts = [];
+    parts.push(y + '年' + m + '月' + d + '日');
+
+    var l = solar2lunar(y, m, d);
+    parts.push(LUNAR_MONTHS[l.lunarMonth] + '月' + lunarDayName(l.lunarDay));
+    parts.push('星期' + week);
+
+    var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    var nt = nextTerm(now);
+
+    var nearestFest = null;
+    var minFestDays = Infinity;
+    getUpcomingFestivals().forEach(function(f){
+      var fd = new Date(f.date.getFullYear(), f.date.getMonth(), f.date.getDate());
+      var diff = Math.round((fd - today) / 86400000);
+      if (diff >= 0 && diff < minFestDays) {
+        minFestDays = diff;
+        nearestFest = { name: f.name, diff: diff };
+      }
+    });
+
+    var infoStr = null;
+
+    if (nearestFest && nearestFest.diff === 0) {
+      infoStr = '今日' + nearestFest.name;
+    } else if (nt && nt.diff === 0) {
+      infoStr = '今日' + nt.name;
+    } else {
+      var festOk = nearestFest && nearestFest.diff <= 30;
+      var termOk = nt && nt.diff <= 30;
+      if (festOk && termOk) {
+        if (nearestFest.diff <= nt.diff) {
+          infoStr = '距' + nearestFest.name + nearestFest.diff + '天';
+        } else {
+          infoStr = '距' + nt.name + nt.diff + '天';
+        }
+      } else if (festOk) {
+        infoStr = '距' + nearestFest.name + nearestFest.diff + '天';
+      } else if (termOk) {
+        infoStr = '距' + nt.name + nt.diff + '天';
+      }
+    }
+
+    if (infoStr) parts.push(infoStr);
+    infoEl.textContent = parts.join('  ');
+  }
+
+  /* =========================================================
+     11. 时钟循环
+     ========================================================= */
+  function pad2(n){return n<10?'0'+n:''+n;}
+  var lastH='',lastM='',lastS='';
+  var lastHourForBrightness = -1;
+
+  function update(now){
+    var h = pad2(now.getHours()), m = pad2(now.getMinutes()), s = pad2(now.getSeconds());
+    if (h !== lastH) { tH.textContent = h; lastH = h; }
+    if (m !== lastM) { tM.textContent = m; lastM = m; }
+    if (s !== lastS) { tS.textContent = s; lastS = s; }
+
+    var hh = now.getHours();
+    if (hh !== lastHourForBrightness) {
+      lastHourForBrightness = hh;
+      applyEffectiveBrightness();
+    }
+
+    var key = now.toDateString();
+    if (key !== infoKey) {
+      infoKey = key;
+      renderInfo(now);
+      requestAnimationFrame(scheduleFit);
+    }
+  }
+  function loop(){
+    var now = new Date();
+    update(now);
+    var delay = 1000 - now.getMilliseconds();
+    if (delay < 30) delay = 30;
+    setTimeout(loop, delay);
+  }
+
+  /* =========================================================
+     12. 内置彩色 SVG
+     ========================================================= */
+  var SVG_OPEN='<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" class="wx-icon" aria-hidden="true">';
+  var SVG_CLOSE='</svg>';
+
+  var SUN_FULL =
+    '<circle cx="32" cy="32" r="12" fill="#FFD60A"/>' +
+    '<g stroke="#FFD60A" stroke-width="3.5" stroke-linecap="round">' +
+      '<line x1="32" y1="6" x2="32" y2="14"/>' +
+      '<line x1="32" y1="50" x2="32" y2="58"/>' +
+      '<line x1="6" y1="32" x2="14" y2="32"/>' +
+      '<line x1="50" y1="32" x2="58" y2="32"/>' +
+      '<line x1="13" y1="13" x2="19" y2="19"/>' +
+      '<line x1="45" y1="45" x2="51" y2="51"/>' +
+      '<line x1="13" y1="51" x2="19" y2="45"/>' +
+      '<line x1="45" y1="19" x2="51" y2="13"/>' +
+    '</g>';
+
+  var SUN_SMALL =
+    '<circle cx="44" cy="18" r="9" fill="#FFD60A"/>' +
+    '<g stroke="#FFD60A" stroke-width="3" stroke-linecap="round">' +
+      '<line x1="44" y1="3" x2="44" y2="8"/>' +
+      '<line x1="58" y1="18" x2="63" y2="18"/>' +
+      '<line x1="54" y1="8" x2="57" y2="5"/>' +
+      '<line x1="34" y1="8" x2="31" y2="5"/>' +
+    '</g>';
+
+  var CLOUD_WHITE =
+    '<g fill="#FFFFFF">' +
+      '<circle cx="20" cy="42" r="8"/>' +
+      '<circle cx="32" cy="38" r="10"/>' +
+      '<circle cx="44" cy="43" r="7"/>' +
+      '<rect x="20" y="42" width="24" height="8" rx="4"/>' +
+    '</g>';
+
+  var CLOUD_GRAY =
+    '<g fill="#E8EEF5">' +
+      '<circle cx="22" cy="28" r="9"/>' +
+      '<circle cx="36" cy="24" r="11"/>' +
+      '<circle cx="48" cy="30" r="8"/>' +
+      '<rect x="22" y="28" width="26" height="10" rx="5"/>' +
+    '</g>';
+
+  var CLOUD_DARK =
+    '<g fill="#B8C2CC">' +
+      '<circle cx="22" cy="28" r="9"/>' +
+      '<circle cx="36" cy="24" r="11"/>' +
+      '<circle cx="48" cy="30" r="8"/>' +
+      '<rect x="22" y="28" width="26" height="10" rx="5"/>' +
+    '</g>';
+
+  var RAIN_DROPS =
+    '<g stroke="#00D4FF" stroke-width="4" stroke-linecap="round">' +
+      '<line x1="24" y1="46" x2="22" y2="56"/>' +
+      '<line x1="34" y1="48" x2="32" y2="58"/>' +
+      '<line x1="44" y1="46" x2="42" y2="56"/>' +
+    '</g>';
+
+  var SNOW_FLAKES =
+    '<g stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round">' +
+      '<g transform="translate(24,52)">' +
+        '<line x1="-4" y1="0" x2="4" y2="0"/>' +
+        '<line x1="0" y1="-4" x2="0" y2="4"/>' +
+        '<line x1="-3" y1="-3" x2="3" y2="3"/>' +
+        '<line x1="-3" y1="3" x2="3" y2="-3"/>' +
+      '</g>' +
+      '<g transform="translate(40,52)">' +
+        '<line x1="-4" y1="0" x2="4" y2="0"/>' +
+        '<line x1="0" y1="-4" x2="0" y2="4"/>' +
+        '<line x1="-3" y1="-3" x2="3" y2="3"/>' +
+        '<line x1="-3" y1="3" x2="3" y2="-3"/>' +
+      '</g>' +
+    '</g>';
+
+  var LIGHTNING =
+    '<polygon points="36,40 26,54 32,54 28,62 42,46 35,46 40,40" fill="#FFEB3B"/>';
+
+  var FOG_LINES =
+    '<g stroke="#C8D4E0" stroke-width="3" stroke-linecap="round">' +
+      '<line x1="14" y1="46" x2="50" y2="46"/>' +
+      '<line x1="18" y1="54" x2="46" y2="54"/>' +
+    '</g>';
+
+  function builtinSvg(code){
+    var body;
+    if(code===0||code===1) body=SUN_FULL;
+    else if(code===2) body=SUN_SMALL+CLOUD_WHITE;
+    else if(code===3) body=CLOUD_GRAY;
+    else if(code===45||code===48) body=CLOUD_GRAY+FOG_LINES;
+    else if((code>=51&&code<=67)||(code>=80&&code<=82)) body=CLOUD_GRAY+RAIN_DROPS;
+    else if((code>=71&&code<=77)||code===85||code===86) body=CLOUD_GRAY+SNOW_FLAKES;
+    else if(code>=95) body=CLOUD_DARK+LIGHTNING;
+    else body=CLOUD_GRAY;
+    return SVG_OPEN+body+SVG_CLOSE;
+  }
+
+  /* =========================================================
+     13. WMO → 各图标集代码
+     ========================================================= */
+  function qweatherCode(c){
+    if(c===0||c===1)return '100';
+    if(c===2)return '102';
+    if(c===3)return '104';
+    if(c===45||c===48)return '501';
+    if(c>=51&&c<=55)return '309';
+    if(c===61)return '305';
+    if(c===63)return '306';
+    if(c===65)return '307';
+    if(c===71)return '400';
+    if(c===73)return '401';
+    if(c===75)return '402';
+    if(c===77)return '407';
+    if(c===80)return '300';
+    if(c===81)return '301';
+    if(c===82)return '310';
+    if(c===85||c===86)return '407';
+    if(c===95)return '302';
+    if(c===96||c===99)return '304';
+    return '104';
+  }
+  function erikCode(c){
+    if(c===0||c===1)return 'wi-day-sunny';
+    if(c===2)return 'wi-day-cloudy';
+    if(c===3)return 'wi-cloudy';
+    if(c===45||c===48)return 'wi-fog';
+    if(c>=51&&c<=55)return 'wi-sprinkle';
+    if(c>=61&&c<=65)return 'wi-rain';
+    if(c===71||c===73||c===75||c===77)return 'wi-snow';
+    if(c>=80&&c<=82)return 'wi-showers';
+    if(c===85||c===86)return 'wi-snow';
+    if(c===95)return 'wi-thunderstorm';
+    if(c===96||c===99)return 'wi-hail';
+    return 'wi-cloudy';
+  }
+  function weatherbitCode(c){
+    if(c===0||c===1)return 'c01d';
+    if(c===2)return 'c02d';
+    if(c===3)return 'c04d';
+    if(c===45||c===48)return 'a01d';
+    if(c>=51&&c<=55)return 'd01d';
+    if(c===61)return 'r01d';
+    if(c===63)return 'r02d';
+    if(c===65)return 'r03d';
+    if(c===71)return 's01d';
+    if(c===73)return 's02d';
+    if(c===75)return 's03d';
+    if(c===77)return 's01d';
+    if(c===80)return 'r04d';
+    if(c===81)return 'r05d';
+    if(c===82)return 'r05d';
+    if(c===85||c===86)return 's01d';
+    if(c===95)return 't01d';
+    if(c===96||c===99)return 't03d';
+    return 'c04d';
+  }
+
+  /* =========================================================
+     14. 图标 HTML
+     ========================================================= */
+  function weatherIconHtml(code){
+    var s = state.weatherIconSet;
+
+    if (s === 'qweather') {
+      return '<span class="wx-icon wx-font wx-font-qi"><i class="qi-' +
+             qweatherCode(code) + '"></i></span>';
+    }
+    if (s === 'erik') {
+      return '<span class="wx-icon wx-font wx-font-wi"><i class="wi ' +
+             erikCode(code) + '"></i></span>';
+    }
+    if (s === 'weatherbit') {
+      return '<img class="wx-icon" alt="" ' +
+        'src="https://www.weatherbit.io/static/img/icons/' +
+        weatherbitCode(code) + '.png" onerror="this.style.opacity=0.15">';
+    }
+    return builtinSvg(code);
+  }
+
+  /* =========================================================
+     15. 天气
+     ========================================================= */
+  var TIANJIN = { lat: 39.0842, lon: 117.2009 };
+  var lastWeatherData = null;
+
+  function renderForecast(data){
+    if (!data) return;
+
+    if (data.current && typeof data.current.temperature_2m === 'number') {
+      wTemp.textContent = Math.round(data.current.temperature_2m) + '°';
+    }
+
+    if (data.daily && data.daily.time && data.daily.time.length > 0) {
+      var codes = data.daily.weather_code || [];
+      var tmax  = data.daily.temperature_2m_max || [];
+      var tmin  = data.daily.temperature_2m_min || [];
+      var frag  = [];
+
+      for (var i = 0; i <= 2 && i < data.daily.time.length; i++) {
+        var label;
+        if (i === 0) label = '今日';
+        else {
+          var p = data.daily.time[i].split('-');
+          label = parseInt(p[1], 10) + '.' + parseInt(p[2], 10);
+        }
+        var ic = weatherIconHtml(codes[i]);
+        var hi = (typeof tmax[i] === 'number') ? Math.round(tmax[i]) : '--';
+        var lo = (typeof tmin[i] === 'number') ? Math.round(tmin[i]) : '--';
+
+        frag.push(
+          '<span class="fc-sep">·</span>' +
+          '<span class="fc">' +
+            '<span class="fc-date">' + label + '</span>' +
+            ic +
+            '<span class="fc-temp">' + hi + '/' + lo + '</span>' +
+          '</span>'
+        );
+      }
+      forecastEl.innerHTML = frag.join('');
+    }
+
+    weatherHasData = true;
+    weatherRow.style.display = state.showWeather ? '' : 'none';
+    requestAnimationFrame(scheduleFit);
+  }
+
+  function fetchWeather(){
+    var url = 'https://api.open-meteo.com/v1/forecast' +
+              '?latitude=' + TIANJIN.lat +
+              '&longitude=' + TIANJIN.lon +
+              '&current=temperature_2m,weather_code' +
+              '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
+              '&forecast_days=3' +
+              '&timezone=Asia%2FShanghai';
+
+    if (typeof fetch !== 'function') return;
+
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        lastWeatherData = j;
+        renderForecast(j);
+      })
+      .catch(function () {
+        weatherHasData = false;
+        lastWeatherData = null;
+        wTemp.textContent = '';
+        forecastEl.innerHTML = '';
+        weatherRow.style.display = 'none';
+        requestAnimationFrame(scheduleFit);
+      });
+  }
+
+  function scheduleWeatherFetch(){
+    var now = new Date();
+    var next = new Date(now);
+    var m = now.getMinutes();
+    var nq = (Math.floor(m / 15) + 1) * 15;
+
+    if (nq >= 60) {
+      next.setHours(now.getHours() + 1);
+      next.setMinutes(0, 0, 0);
+    } else {
+      next.setMinutes(nq, 0, 0);
+    }
+
+    var delay = next.getTime() - now.getTime() + 800;
+
+    setTimeout(function () {
+      fetchWeather();
+      scheduleWeatherFetch();
+    }, delay);
+  }
+
+  /* =========================================================
+     16. 全屏
+     ========================================================= */
+  function isFullscreen(){
+    return !!(document.fullscreenElement||document.webkitFullscreenElement||
+              document.mozFullScreenElement||document.msFullscreenElement);
+  }
+  function requestFull(){
+    var el=document.documentElement;
+    var fn=el.requestFullscreen||el.webkitRequestFullscreen||
+           el.mozRequestFullScreen||el.msRequestFullscreen;
+    if(fn){try{fn.call(el);}catch(e){}}
+  }
+  function exitFull(){
+    var fn=document.exitFullscreen||document.webkitExitFullscreen||
+           document.mozCancelFullScreen||document.msExitFullscreen;
+    if(fn){try{fn.call(document);}catch(e){}}
+  }
+  function toggleFullscreen(){
+    if(isFullscreen())exitFull();else requestFull();
+    setTimeout(scheduleFit,220);
+  }
+
+  /* =========================================================
+     17. 工具栏 / 鼠标指针
+     ========================================================= */
+  var toolbarTimer=0, cursorTimer=0;
+
+  function showCursor(){
+    document.body.classList.remove('hide-cursor');
+    if(cursorTimer){clearTimeout(cursorTimer);cursorTimer=0;}
+    cursorTimer=setTimeout(function(){
+      cursorTimer=0;
+      document.body.classList.add('hide-cursor');
+    },3500);
+  }
+  function hideCursorNow(){
+    if(cursorTimer){clearTimeout(cursorTimer);cursorTimer=0;}
+    document.body.classList.add('hide-cursor');
+  }
+  function showToolbar(){
+    if(toolbarTimer){clearTimeout(toolbarTimer);toolbarTimer=0;}
+    toolbar.classList.remove('hidden');
+  }
+  function hideToolbarLater(delay){
+    if(toolbarTimer){clearTimeout(toolbarTimer);toolbarTimer=0;}
+    toolbarTimer=setTimeout(function(){
+      toolbarTimer=0;
+      toolbar.classList.add('hidden');
+    },delay);
+  }
+  function resetToolbar(){
+    showToolbar();
+    hideToolbarLater(3500);
+    showCursor();
+  }
+
+  /* =========================================================
+     18. 关于菜单文本
+     ========================================================= */
+  var ABOUT_TEXT =
+'时钟 · 功能清单\n' +
+'──────────────\n' +
+'【时间】24 小时制 时/分/秒，秒可隐藏\n' +
+'【日期】公历 + 农历 + 星期 + 节气\n' +
+'【天气】天津 · open-meteo API\n' +
+'  · 实时温度（取整）\n' +
+'  · 今日 + 未来 2 天预报\n' +
+'  · 每 15 分钟对齐刷新（0/15/30/45 分）\n' +
+'  · 请求失败时整行隐藏\n' +
+'【图标】4 套可选\n' +
+'  · Weather Icons（字体·青色，默认）\n' +
+'  · 内置彩色（SVG）\n' +
+'  · Weatherbit（图片）\n' +
+'  · 和风天气（字体·白色）\n' +
+'【字体】自动检测系统等宽字体\n' +
+'  · 像素级去重，菜单显示 0123456789 预览\n' +
+'【亮度】10 档（100%–10%）\n' +
+'  · 白天 60% / 夜间 20%\n' +
+'  · 夜间自动调暗（22:00–06:00）\n' +
+'  · 手动调整只影响当前时段\n' +
+'【显示开关】秒 / 日期 / 天气 / 夜间模式\n' +
+'【节日倒计时】公历 6 + 农历 9\n' +
+'  · 公历：元旦、妇女节、劳动节、儿童节、建军节、国庆节\n' +
+'  · 农历：春节、元宵、端午、七夕、中元、中秋、重阳、腊八、除夕\n' +
+'  · 当日显示「今日XX」，30 天内显示「距XX N天」\n' +
+'  · 节日优先于节气\n' +
+'【防烧屏】像素漂移（每 30 分钟 ±4px）\n' +
+'【全屏】按钮 / 双击 / F 键\n' +
+'【快捷键】F 全屏，H 秒，D 日期，W 天气，Esc 关菜单\n' +
+'【鼠标】3.5 秒无操作自动隐藏\n' +
+'【持久化】偏好保存在 localStorage\n' +
+'  · 清除浏览器数据后会恢复代码默认值\n' +
+'【适配】树莓派 + 7 寸 DSI 屏，安全区适配\n' +
+'\n' +
+'────────────────\n' +
+'【部署提示】\n' +
+'开机全屏自启（Chromium Kiosk）：\n' +
+'编辑 ~/.config/lxsession/LXDE-pi/autostart，加入：\n' +
+'@chromium-browser --kiosk --noerrdialogs --disable-infobars file:///home/pi/clock.html\n' +
+'\n' +
+'【修改城市】\n' +
+'1. HTML 里搜索 <span class="wcity">天津</span> 改成城市名\n' +
+'2. JS 里搜索 var TIANJIN = { lat: 39.0842, lon: 117.2009 };\n' +
+'   把经纬度改成你的城市坐标\n';
+
+  /* =========================================================
+     19. 菜单构建
+     ========================================================= */
+  var menuOpen=false;
+
+  function positionMenu(){
+    var r=toolbar.getBoundingClientRect();
+    var bottom=Math.max(8,window.innerHeight-r.top+12);
+    menuEl.style.bottom=bottom+'px';
+  }
+  function openMenu(html, narrow){
+    menuEl.innerHTML=html;
+    menuEl.classList.toggle('narrow', !!narrow);
+    menuEl.classList.add('show');
+    overlay.classList.add('show');
+    menuOpen=true;
+    positionMenu();
+  }
+  function closeMenu(){
+    menuEl.classList.remove('show');
+    menuEl.classList.remove('narrow');
+    overlay.classList.remove('show');
+    menuEl.innerHTML='';
+    menuOpen=false;
+  }
+
+  function buildFontMenu(){
+    var html='<div class="menu-title">选择字体</div><div class="font-grid">';
+    for(var i=0;i<MONO_FONTS.length;i++){
+      var f=MONO_FONTS[i];
+      var active=(f.name===state.fontName)?' active':'';
+      var safeCss=f.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+      html+='<button class="font-item'+active+'"'+
+            ' data-font="'+f.name.replace(/"/g,'&quot;')+'"'+
+            ' style="font-family:\''+safeCss+'\',monospace">'+
+            FONT_TEST_STR+'</button>';
+    }
+    html+='</div>';
+    return html;
+  }
+
+  function buildIconMenu(){
+    var html='<div class="menu-title">选择天气图标集</div><div class="font-grid">';
+    for(var i=0;i<ICON_SETS.length;i++){
+      var s=ICON_SETS[i];
+      var active=(s.id===state.weatherIconSet)?' active':'';
+      html+='<button class="icon-item'+active+'"'+
+            ' data-icon-set="'+s.id+'">'+s.name+'</button>';
+    }
+    html+='</div>';
+    return html;
+  }
+
+  /* 夜间模式文案改成"打开/关闭"，其他保持"显示/隐藏" */
+  function buildDisplayMenu(){
+    function row(key,label,on){
+      var onText  = (key === 'night') ? '打开' : '显示';
+      var offText = (key === 'night') ? '关闭' : '隐藏';
+      return '<button class="display-item'+(on?' on':'')+'"'+
+             ' data-display-toggle="'+key+'">'+
+               '<span>'+label+'</span>'+
+               '<span class="state">'+(on?onText:offText)+'</span>'+
+             '</button>';
+    }
+    return '<div class="menu-title">显示选项</div><div class="display-grid">'+
+      row('sec','秒', state.showSec)+
+      row('date','日期', state.showDate)+
+      row('weather','天气', state.showWeather)+
+      row('night','夜间模式', state.nightMode)+
+    '</div>';
+  }
+
+  function buildBrightnessMenu(){
+    var html='<div class="menu-title">文字亮度</div><div class="bright-grid">';
+    var current = isNightNow() ? state.nightBrightness : state.brightness;
+    for(var i=0;i<BRIGHT_STEPS.length;i++){
+      var v=BRIGHT_STEPS[i];
+      var active=(v===current)?' active':'';
+      html+='<button class="bright-item'+active+'" data-bright="'+v+'">'+v+'%</button>';
+    }
+    html+='</div>';
+    return html;
+  }
+
+  function buildAboutMenu(){
+    var escaped = ABOUT_TEXT
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;');
+    return '<div class="about-head">' +
+             '<span class="about-title">关于</span>' +
+             '<button class="about-copy-btn" id="aboutCopyBtn" type="button">复制</button>' +
+           '</div>' +
+           '<div class="about-text" id="aboutText">' + escaped + '</div>';
+  }
+
+  /* =========================================================
+     20. 关于菜单复制
+     ========================================================= */
+  function showCopySuccess(){
+    var btn = document.getElementById('aboutCopyBtn');
+    if (!btn) return;
+    if (btn.dataset.timer) clearTimeout(parseInt(btn.dataset.timer, 10));
+    btn.textContent = '✓';
+    btn.classList.add('done');
+    var t = setTimeout(function(){
+      btn.textContent = '复制';
+      btn.classList.remove('done');
+      delete btn.dataset.timer;
+    }, 1500);
+    btn.dataset.timer = t;
+  }
+
+  function fallbackCopy(text){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      var ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) showCopySuccess();
+    } catch (e) {}
+  }
+
+  function copyAboutText(){
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ABOUT_TEXT)
+        .then(showCopySuccess)
+        .catch(function(){ fallbackCopy(ABOUT_TEXT); });
+    } else {
+      fallbackCopy(ABOUT_TEXT);
+    }
+  }
+
+  /* =========================================================
+     21. 事件绑定
+     ========================================================= */
+  function bindEvents(){
+    btnFont.addEventListener('click',function(e){
+      e.stopPropagation(); resetToolbar();
+      if(menuOpen){closeMenu();return;}
+      openMenu(buildFontMenu());
+    });
+    btnIcon.addEventListener('click',function(e){
+      e.stopPropagation(); resetToolbar();
+      if(menuOpen){closeMenu();return;}
+      openMenu(buildIconMenu());
+    });
+    btnDisplay.addEventListener('click',function(e){
+      e.stopPropagation(); resetToolbar();
+      if(menuOpen){closeMenu();return;}
+      openMenu(buildDisplayMenu(), true);
+    });
+    btnBright.addEventListener('click',function(e){
+      e.stopPropagation(); resetToolbar();
+      if(menuOpen){closeMenu();return;}
+      openMenu(buildBrightnessMenu());
+    });
+    btnAbout.addEventListener('click',function(e){
+      e.stopPropagation(); resetToolbar();
+      if(menuOpen){closeMenu();return;}
+      openMenu(buildAboutMenu());
+    });
+    btnFull.addEventListener('click',function(e){
+      e.stopPropagation(); resetToolbar(); closeMenu();
+      toggleFullscreen();
+    });
+
+    menuEl.addEventListener('click',function(e){
+      var t = e.target;
+
+      var copyBtn = t.closest ? t.closest('.about-copy-btn') : null;
+      if (copyBtn) {
+        e.stopPropagation();
+        copyAboutText();
+        return;
+      }
+
+      resetToolbar();
+
+      var fi=t.closest?t.closest('.font-item'):null;
+      if(fi&&fi.dataset.font){applyFont(fi.dataset.font);closeMenu();return;}
+
+      var ii=t.closest?t.closest('.icon-item'):null;
+      if(ii&&ii.dataset.iconSet){applyIconSet(ii.dataset.iconSet);closeMenu();return;}
+
+      var bi=t.closest?t.closest('.bright-item'):null;
+      if(bi&&bi.dataset.bright){applyBrightness(parseInt(bi.dataset.bright,10));closeMenu();return;}
+
+      var di=t.closest?t.closest('.display-item'):null;
+      if(di&&di.dataset.displayToggle){
+        var k=di.dataset.displayToggle;
+        if(k==='sec')state.showSec=!state.showSec;
+        else if(k==='date')state.showDate=!state.showDate;
+        else if(k==='weather')state.showWeather=!state.showWeather;
+        else if(k==='night'){state.nightMode=!state.nightMode;saveState();applyEffectiveBrightness();}
+        applyVisibility();
+        menuEl.innerHTML=buildDisplayMenu();
+        positionMenu();
+        return;
+      }
+    });
+    menuEl.addEventListener('mousedown',function(e){e.stopPropagation();});
+    menuEl.addEventListener('touchstart',function(e){e.stopPropagation();},{passive:true});
+
+    overlay.addEventListener('click',function(){closeMenu();resetToolbar();});
+
+    document.addEventListener('click',function(e){
+      if(e.target.closest&&e.target.closest('#menu'))return;
+      resetToolbar();
+    });
+
+    document.addEventListener('dblclick',function(e){
+      var t=e.target;
+      if(t&&t.closest&&t.closest('.btn, #menu'))return;
+      toggleFullscreen();
+    });
+
+    var cursorRaf=0;
+    document.addEventListener('mousemove',function(){
+      if(cursorRaf)return;
+      cursorRaf=requestAnimationFrame(function(){cursorRaf=0;showCursor();});
+    },{passive:true});
+    document.addEventListener('mousedown',function(){showCursor();},{passive:true});
+    document.addEventListener('mouseleave',function(){hideCursorNow();});
+    document.addEventListener('touchstart',function(){showCursor();},{passive:true});
+
+    var resizeTimer=0;
+    window.addEventListener('resize',function(){
+      if(resizeTimer)clearTimeout(resizeTimer);
+      resizeTimer=setTimeout(function(){
+        resizeTimer=0;
+        scheduleFit();
+        if(menuOpen)positionMenu();
+      },80);
+    });
+    window.addEventListener('orientationchange',function(){
+      setTimeout(scheduleFit,320);
+    });
+
+    ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'].forEach(function(ev){
+      document.addEventListener(ev,function(){
+        btnFull.textContent=isFullscreen()?'退出全屏':'全屏';
+        resetToolbar();
+        setTimeout(scheduleFit,220);
+      });
+    });
+
+    document.addEventListener('keydown',function(e){
+      if(e.key==='Escape'&&menuOpen)closeMenu();
+      if(e.key==='f'||e.key==='F')toggleFullscreen();
+      if(e.key==='h'||e.key==='H'){state.showSec=!state.showSec;applyVisibility();}
+      if(e.key==='d'||e.key==='D'){state.showDate=!state.showDate;applyVisibility();}
+      if(e.key==='w'||e.key==='W'){state.showWeather=!state.showWeather;applyVisibility();}
+      resetToolbar();
+    });
+
+    document.addEventListener('visibilitychange',function(){
+      if(!document.hidden){
+        var now=new Date();
+        lastH=lastM=lastS='';infoKey='';
+        update(now);
+        fetchWeather();
+        scheduleFit();
+        resetToolbar();
+      }
+    });
+
+    if(document.fonts&&document.fonts.ready){
+      document.fonts.ready.then(function(){scheduleFit();});
+    }
+  }
+
+  /* =========================================================
+     22. 启动
+     ========================================================= */
+  function init(){
+    MONO_FONTS=detectMonoFonts();
+    loadState();
+
+    applyFont(state.fontName);
+    applyEffectiveBrightness();
+
+    colonSec.style.display   = state.showSec?'':'none';
+    tS.style.display         = state.showSec?'':'none';
+    infoEl.style.display     = state.showDate?'':'none';
+    weatherRow.style.display = 'none';
+
+    driftPixels();
+    setInterval(driftPixels, 30 * 60 * 1000);
+
+    bindEvents();
+
+    var now=new Date();
+    update(now);
+    renderInfo(now);
+
+    requestAnimationFrame(function(){
+      fitTime();fitInfoLine();fitWeatherLine();
+      requestAnimationFrame(function(){
+        fitTime();fitInfoLine();fitWeatherLine();
+      });
+    });
+
+    loop();
+
+    showToolbar();
+    hideToolbarLater(3500);
+    showCursor();
+
+    fetchWeather();
+    scheduleWeatherFetch();
+  }
+
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded',init);
+  }else{
+    init();
+  }
+
+})();
+</script>
+</body>
+</html>
