@@ -1,7 +1,7 @@
 # html-clock
 single html file clock
 
-## 预览页面：[https://cai-xk.github.io/html-clock/](https://cai-xk.github.io/html-clock/)
+## 预览页面：<a href="https://cai-xk.github.io/html-clock/" target="_blank">https://cai-xk.github.io/html-clock/</a>
 
 # 网页时钟 - 功能清单
 > 单文件HTML网页时钟，适配树莓派7寸DSI屏
